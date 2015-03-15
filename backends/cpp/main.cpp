@@ -18,10 +18,11 @@
 
 using namespace std;
 
+//#define BLOCK_SIZE 4096
 #define BLOCK_SIZE 8192
 
 // increment when a new block is found
-uint32_t globalId = 0;
+uint32_t globalId = -1;
 
 // Map from block hashes to id's
 unordered_multimap<string, uint32_t> blockMap;
@@ -75,7 +76,10 @@ vector<uint32_t> uploadFile(string path, byte key[], byte iv[], uint32_t *sizeP)
   *sizeP = size;
   file.seekg(0, file.beg);
 
+  int counter = 0;
+
   while (file.read(block, BLOCK_SIZE)) {
+    printf("counter: %ld\n", counter++);
     printf("reading: %ld\n", file.gcount());
     uint32_t blockId = processBlock(reinterpret_cast<unsigned char*>(block), key, iv);
     printf("got block id: %d\n", blockId);
@@ -83,8 +87,10 @@ vector<uint32_t> uploadFile(string path, byte key[], byte iv[], uint32_t *sizeP)
     memset(block, 0, BLOCK_SIZE);
   }
   if (file.gcount() > 0) {
+    printf("counter: %ld\n", counter++);
     printf("reading: %ld\n", file.gcount());
     uint32_t blockId = processBlock(reinterpret_cast<unsigned char*>(block), key, iv);
+    printf("got block id: %d\n", blockId);
     result.push_back(blockId);
   }
 
@@ -92,8 +98,16 @@ vector<uint32_t> uploadFile(string path, byte key[], byte iv[], uint32_t *sizeP)
   return result;
 }
 
-unsigned char * reconstructFile(vector<uint32_t> fileArr) {
+void reconstructFile(string output_path, vector<uint32_t> fileArr, size_t fileSize) {
+  unsigned char buffer[((fileSize / BLOCK_SIZE) + 1) * BLOCK_SIZE];
+  for (int i = 0; i < fileArr.size(); i++) {
+    uint32_t blockId = fileArr[i];
+    memcpy(buffer + i * BLOCK_SIZE, blockList[blockId], BLOCK_SIZE);
+  }
 
+  FILE* pfile;
+  pfile = fopen(output_path.c_str(), "wb");
+  fwrite(buffer, sizeof(unsigned char), fileSize, pfile);
 }
 
 string encryptChunkAES(string plaintext, byte key[], byte iv[]) {
@@ -169,7 +183,7 @@ int main(int argc, char* argv[]) {
 
   string hash = computeSHA256(plaintext);
 
-  string inputFile = "testsame.txt";
+  string inputFile = "test.txt";
   uint32_t sizeP = 0;
   vector<uint32_t> fileArr = uploadFile(inputFile, key, iv, &sizeP);
   printf("file: ");
@@ -177,5 +191,7 @@ int main(int argc, char* argv[]) {
     printf("%d ", fileArr[i]);
   }
   cout<<endl;
+
+  reconstructFile("test-reconstruct.txt", fileArr, sizeP);
 }
 
