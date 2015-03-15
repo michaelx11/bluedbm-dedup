@@ -1,0 +1,4 @@
+sudo apt-get install libcrypto++-utils libcrypto++-dev libcrypto++-doc
+g++ -o output source.cpp -lcryptopp -std=c++11
+
+./output "filename"
