@@ -1,11 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
+#include <fstream>
 #include <iomanip>
 #include <math.h>
 #include <string.h>
 #include <algorithm>
 #include <vector>
+#include <stdint.h>
+#include <unordered_map>
 
 #include "cryptopp/modes.h"
 #include "cryptopp/aes.h"
@@ -15,12 +18,86 @@
 
 using namespace std;
 
+#define BLOCK_SIZE 8192
+
+// increment when a new block is found
+uint32_t globalId = 0;
+
+// Map from block hashes to id's
+unordered_multimap<string, uint32_t> blockMap;
+vector<unsigned char *> blockList;
+
+// Declarations
+uint32_t processBlock(unsigned char block[BLOCK_SIZE], byte key[], byte iv[]);
+string encryptChunkAES(string plaintext, byte key[], byte iv[]);
+string computeSHA256(string input);
+
+uint32_t addBlock(unsigned char block[BLOCK_SIZE]) {
+  unsigned char * newBlock = (unsigned char *)malloc(BLOCK_SIZE);
+  memcpy(newBlock, block, BLOCK_SIZE);
+  blockList.push_back(newBlock);
+  globalId++;
+}
+
+uint32_t processBlock(unsigned char block[BLOCK_SIZE], byte key[], byte iv[]) {
+  string blockStr(reinterpret_cast<char*>(block));
+  string hash = computeSHA256(blockStr);
+  auto search = blockMap.equal_range(hash);
+  uint32_t resultBlockId = -1;
+
+  // hash already exists as key
+  for (auto item = search.first; item != search.second; item++) {
+    uint32_t blockId = item->second;
+    if (memcmp(blockList[blockId], block, BLOCK_SIZE)) {
+      resultBlockId = blockId;
+      break;
+    }
+  }
+  
+  // not found
+  if (resultBlockId == -1) {
+    resultBlockId = addBlock(block);
+  }
+  blockMap.emplace(hash, resultBlockId);
+  return resultBlockId;
+}
+
+vector<uint32_t> uploadFile(string path, byte key[], byte iv[], uint32_t *sizeP) {
+  vector<uint32_t> result;
+  printf("yo\n");
+  // Read file
+  char block[BLOCK_SIZE];
+  memset(block, 0, BLOCK_SIZE);
+
+  ifstream file (path.c_str(), ios::binary);
+  file.seekg(0, file.end);
+  int size = file.tellg();
+  *sizeP = size;
+  file.seekg(0, file.beg);
+
+  while (file.read(block, BLOCK_SIZE)) {
+    printf("reading: %ld\n", file.gcount());
+    uint32_t blockId = processBlock(reinterpret_cast<unsigned char*>(block), key, iv);
+    printf("got block id: %d\n", blockId);
+    result.push_back(blockId);
+    memset(block, 0, BLOCK_SIZE);
+  }
+  if (file.gcount() > 0) {
+    printf("reading: %ld\n", file.gcount());
+    uint32_t blockId = processBlock(reinterpret_cast<unsigned char*>(block), key, iv);
+    result.push_back(blockId);
+  }
+
+  // Break file into blocks
+  return result;
+}
+
+unsigned char * reconstructFile(vector<uint32_t> fileArr) {
+
+}
+
 string encryptChunkAES(string plaintext, byte key[], byte iv[]) {
   string ciphertext;
-
-  cout << "Plain Text (" << plaintext.size() << " bytes)" << endl;
-  cout << plaintext;
-  cout << endl << endl;
 
   CryptoPP::AES::Encryption aesEncryption(key, CryptoPP::AES::DEFAULT_KEYLENGTH);
   CryptoPP::CBC_Mode_ExternalCipher::Encryption cbcEncryption(aesEncryption, iv);
@@ -29,6 +106,10 @@ string encryptChunkAES(string plaintext, byte key[], byte iv[]) {
   stfEncryptor.Put( reinterpret_cast<const unsigned char*>( plaintext.c_str() ), plaintext.length() + 1 );
   stfEncryptor.MessageEnd();
 
+  /*
+  cout << "Plain Text (" << plaintext.size() << " bytes)" << endl;
+  cout << plaintext;
+  cout << endl << endl;
   std::cout << "Cipher Text (" << ciphertext.size() << " bytes)" << std::endl;
 
   for( int i = 0; i < ciphertext.size(); i++ ) {
@@ -37,7 +118,7 @@ string encryptChunkAES(string plaintext, byte key[], byte iv[]) {
   }
 
   std::cout << std::endl << std::endl;
-
+  */
   return ciphertext;
 }
 
@@ -64,9 +145,12 @@ string computeSHA256(string input) {
   encoder.Put(digest, sizeof(digest));
   encoder.MessageEnd();
 
-  cout << "hash: " << output << endl;
+//  cout << "hash: " << output << endl;
   return reinterpret_cast<const char *>(digest);
 }
+
+
+
 
 int main(int argc, char* argv[]) {
   byte key[CryptoPP::AES::DEFAULT_KEYLENGTH];
@@ -75,6 +159,7 @@ int main(int argc, char* argv[]) {
   memset( iv, 0x00, CryptoPP::AES::BLOCKSIZE );
   key[0] = 0xac;
   iv[0] = 0xfb;
+
   
   string plaintext = "testing this thingy with some random chunk of text hohohohohohohohoo";
   string ciphertext = encryptChunkAES(plaintext, key, iv);
@@ -83,5 +168,14 @@ int main(int argc, char* argv[]) {
   cout << "decryptedtext: " << decryptedtext << endl;
 
   string hash = computeSHA256(plaintext);
+
+  string inputFile = "testsame.txt";
+  uint32_t sizeP = 0;
+  vector<uint32_t> fileArr = uploadFile(inputFile, key, iv, &sizeP);
+  printf("file: ");
+  for (int i = 0; i < fileArr.size(); i++) {
+    printf("%d ", fileArr[i]);
+  }
+  cout<<endl;
 }
 
