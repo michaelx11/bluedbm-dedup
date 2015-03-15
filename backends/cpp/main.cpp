@@ -9,6 +9,7 @@
 #include <vector>
 #include <stdint.h>
 #include <unordered_map>
+#include <sstream>
 
 #include "cryptopp/modes.h"
 #include "cryptopp/aes.h"
@@ -18,6 +19,7 @@
 
 using namespace std;
 
+//#define BLOCK_SIZE 128
 //#define BLOCK_SIZE 4096
 #define BLOCK_SIZE 8192
 
@@ -65,10 +67,11 @@ uint32_t processBlock(unsigned char block[BLOCK_SIZE], byte key[], byte iv[]) {
 
 vector<uint32_t> uploadFile(string path, byte key[], byte iv[], uint32_t *sizeP) {
   vector<uint32_t> result;
-  printf("yo\n");
   // Read file
   char block[BLOCK_SIZE];
   memset(block, 0, BLOCK_SIZE);
+
+  int prev = globalId;
 
   ifstream file (path.c_str(), ios::binary);
   file.seekg(0, file.end);
@@ -79,20 +82,20 @@ vector<uint32_t> uploadFile(string path, byte key[], byte iv[], uint32_t *sizeP)
   int counter = 0;
 
   while (file.read(block, BLOCK_SIZE)) {
-    printf("counter: %ld\n", counter++);
-    printf("reading: %ld\n", file.gcount());
     uint32_t blockId = processBlock(reinterpret_cast<unsigned char*>(block), key, iv);
-    printf("got block id: %d\n", blockId);
     result.push_back(blockId);
     memset(block, 0, BLOCK_SIZE);
+    counter++;
   }
   if (file.gcount() > 0) {
-    printf("counter: %ld\n", counter++);
-    printf("reading: %ld\n", file.gcount());
     uint32_t blockId = processBlock(reinterpret_cast<unsigned char*>(block), key, iv);
-    printf("got block id: %d\n", blockId);
     result.push_back(blockId);
+    counter++;
   }
+
+  printf("Total blocks needed: %d\n", counter);
+  printf("Blocks created: %d\n", globalId - prev);
+  printf("Blocks deduped: %d\n", counter - (globalId - prev));
 
   // Break file into blocks
   return result;
@@ -167,6 +170,11 @@ string computeSHA256(string input) {
 
 
 int main(int argc, char* argv[]) {
+
+  if (argc < 2) {
+    cout << "missing file argument" << endl;
+    return 0;
+  }
   byte key[CryptoPP::AES::DEFAULT_KEYLENGTH];
   byte iv[CryptoPP::AES::BLOCKSIZE];
   memset( key, 0x00, CryptoPP::AES::DEFAULT_KEYLENGTH );
@@ -177,21 +185,27 @@ int main(int argc, char* argv[]) {
   
   string plaintext = "testing this thingy with some random chunk of text hohohohohohohohoo";
   string ciphertext = encryptChunkAES(plaintext, key, iv);
-  cout << "ciphertext: " << ciphertext << endl;
+//  cout << "ciphertext: " << ciphertext << endl;
   string decryptedtext = decryptChunkAES(ciphertext, key, iv);
-  cout << "decryptedtext: " << decryptedtext << endl;
+//  cout << "decryptedtext: " << decryptedtext << endl;
 
   string hash = computeSHA256(plaintext);
 
-  string inputFile = "test.txt";
+  string inputFile = argv[1];
   uint32_t sizeP = 0;
   vector<uint32_t> fileArr = uploadFile(inputFile, key, iv, &sizeP);
+  printf("Total size: %d bytes\n", sizeP);
+  // Prints file representation as ids
+  /*
   printf("file: ");
   for (int i = 0; i < fileArr.size(); i++) {
     printf("%d ", fileArr[i]);
   }
   cout<<endl;
+  */
 
-  reconstructFile("test-reconstruct.txt", fileArr, sizeP);
+  string outputFile = "reconstructed-" + inputFile;
+
+  reconstructFile(outputFile, fileArr, sizeP);
 }
 
