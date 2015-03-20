@@ -34,6 +34,7 @@ vector<unsigned char *> blockList;
 uint32_t processBlock(unsigned char block[BLOCK_SIZE], byte key[], byte iv[]);
 string encryptChunkAES(string plaintext, byte key[], byte iv[]);
 string computeSHA256(string input);
+void flushBlocks(vector<uint32_t> fileRep);
 
 uint32_t addBlock(unsigned char block[BLOCK_SIZE]) {
   unsigned char * newBlock = (unsigned char *)malloc(BLOCK_SIZE);
@@ -102,7 +103,8 @@ vector<uint32_t> uploadFile(string path, byte key[], byte iv[], uint32_t *sizeP)
 }
 
 void reconstructFile(string output_path, vector<uint32_t> fileArr, size_t fileSize) {
-  unsigned char buffer[((fileSize / BLOCK_SIZE) + 1) * BLOCK_SIZE];
+  unsigned char * buffer = (unsigned char *)malloc(((fileSize / BLOCK_SIZE) + 1) * BLOCK_SIZE);
+//  unsigned char buffer[((fileSize / BLOCK_SIZE) + 1) * BLOCK_SIZE];
   for (int i = 0; i < fileArr.size(); i++) {
     uint32_t blockId = fileArr[i];
     memcpy(buffer + i * BLOCK_SIZE, blockList[blockId], BLOCK_SIZE);
@@ -111,6 +113,7 @@ void reconstructFile(string output_path, vector<uint32_t> fileArr, size_t fileSi
   FILE* pfile;
   pfile = fopen(output_path.c_str(), "wb");
   fwrite(buffer, sizeof(unsigned char), fileSize, pfile);
+  free(buffer);
 }
 
 string encryptChunkAES(string plaintext, byte key[], byte iv[]) {
@@ -192,19 +195,22 @@ int main(int argc, char* argv[]) {
   string hash = computeSHA256(plaintext);
 
   string inputFile = argv[1];
+  int beginIdx = inputFile.rfind('/');
+  string name = inputFile.substr(beginIdx + 1);
+
+  cout << "file: " << inputFile << endl;
   uint32_t sizeP = 0;
   vector<uint32_t> fileArr = uploadFile(inputFile, key, iv, &sizeP);
   printf("Total size: %d bytes\n", sizeP);
   // Prints file representation as ids
-  /*
   printf("file: ");
   for (int i = 0; i < fileArr.size(); i++) {
     printf("%d ", fileArr[i]);
   }
   cout<<endl;
-  */
 
-  string outputFile = "reconstructed-" + inputFile;
+  string outputFile = "constructed/reconstructed-" + name;
+  cout << "Output: " << outputFile << endl;
 
   reconstructFile(outputFile, fileArr, sizeP);
 }
