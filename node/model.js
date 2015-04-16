@@ -1,10 +1,48 @@
 var fs = require('fs');
 var exec = require('child_process').exec;
 
+var BACKEND_COMMAND = "../backends/cpp/main";
+
 exec('mkdir -p data');
 
-// 100 mb
-var SIZE_LIMIT = 4294967296 * 100;
+// 500 mb
+var SIZE_LIMIT = 4294967296 * 500;
+
+// Index from filename -> file representation (id list, size)
+var index = {};
+
+function addFileToIndex(filename, fileRep) {
+  index[filename] = fileRep;
+}
+
+exports.uploadFile = function uploadFile(filedata) {
+  if (!filedata) {
+    return "Error!";
+  }
+  var filename = filedata.originalFilename;
+  var path = filedata.path;
+  var numBytes = filedata.size;
+
+  if (!filename || !path) {
+    return "Error!";
+  }
+
+  if (numBytes > SIZE_LIMIT) {
+    return "Error!";
+  }
+
+  console.log(path);
+  var command = BACKEND_COMMAND + " " + path;
+  console.log(command);
+
+  exec(command, {maxBuffer: SIZE_LIMIT}, function(error, stdout, stderr) {
+    if (error) {
+      console.log(error);
+    } else {
+      console.log(stdout);
+    }
+  });
+}
 
 // returns array of log entries {filename: "", index: ""}
 function getLogEntries() {
@@ -25,6 +63,7 @@ function appendToLogFile(filename, filesize) {
   return getLogEntries().length - 1;
 }
 
+/*
 // synchronous
 exports.uploadFile = function(filedata) {
   if (!filedata) {
@@ -47,6 +86,7 @@ exports.uploadFile = function(filedata) {
   console.log('uploaded: ' + filename + ' index: ' + entryIndex);
   return "index: " + entryIndex + ", url: store.haus/" + entryIndex;
 }
+*/
 
 function serveFile(id, filename, res) {
   res.setHeader('Content-disposition', 'attachment; filename=' + filename);

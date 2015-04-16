@@ -5,7 +5,7 @@ var model = require('./model');
 
 var app = express();
 
-app.set('port', 80);
+app.set('port', 8090);
 app.set('views', __dirname + '/views');
 app.set('view engine', 'html');
 app.engine('html', require('hbs').__express);
