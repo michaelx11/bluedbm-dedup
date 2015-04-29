@@ -39,6 +39,11 @@ class EchoHandler : public proxygen::RequestHandler {
 
  private:
   EchoStats* const stats_{nullptr};
+  void processLoadRequest(std::unique_ptr<proxygen::HTTPMessage> headers) noexcept;
+  void processStoreRequest(std::unique_ptr<proxygen::HTTPMessage> headers) noexcept;
+  void processListRequest(std::unique_ptr<proxygen::HTTPMessage> headers) noexcept;
+  void processGetRequest(std::unique_ptr<proxygen::HTTPMessage> headers) noexcept;
+  void processPostRequest(std::unique_ptr<proxygen::HTTPMessage> headers) noexcept;
 
   std::unique_ptr<folly::IOBuf> body_;
 };

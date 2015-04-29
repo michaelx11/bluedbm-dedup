@@ -83,6 +83,10 @@ int Storage::loadAndMoveFile(string filename, string dstpath) {
   return 0;
 }
 
+string Storage::listFiles() {
+  return "{filenames: [\"hello\", \"sup\"]}";
+}
+
 Storage::~Storage() {};
 
 uint32_t Storage::addBlock(unsigned char block[BLOCK_SIZE]) {

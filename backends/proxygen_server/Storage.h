@@ -58,6 +58,9 @@ class Storage {
     // Load and move a file to a specific path
     int loadAndMoveFile(string filename, string dstpath);
 
+    // List all files that have been stored
+    string listFiles();
+
   protected:
     uint32_t addBlock(unsigned char block[BLOCK_SIZE]);
     uint32_t processBlock(unsigned char block[BLOCK_SIZE], byte key[], byte iv[]);
