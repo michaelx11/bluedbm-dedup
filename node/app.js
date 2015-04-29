@@ -12,7 +12,7 @@ app.engine('html', require('hbs').__express);
 
 app.use(express.cookieParser());
 app.use(express.logger('dev'));
-app.use(express.bodyParser());
+app.use(express.bodyParser({limit: '10gb'}));
 app.use(express.methodOverride());
 app.use(express.static(__dirname + '/public'));
 app.use(express.session({ secret: 'SECRET' }));
@@ -28,8 +28,13 @@ app.get('/', function(req, res) {
 });
 
 app.post('/upload', function(req, res) {
-  var index = model.uploadFile(req.files.filedata);
-  res.end(index + "\n");
+  model.uploadFile(req.files.filedata, function(error, data) {
+    if (error) {
+      console.log("error: " + error);
+    }
+    res.end();
+//    res.send(data);
+  });
 });
 
 app.get('/list', function(req, res) {
@@ -38,9 +43,14 @@ app.get('/list', function(req, res) {
   res.end();
 });
 
+app.get('/download', function(req, res) {
+  model.getFile(req, res);
+});
+/*
 app.get('/:id', function(req, res) {
   model.getFile(req, res);
 });
+*/
 
 
 app.listen(app.get('port'), function() {

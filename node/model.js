@@ -1,4 +1,5 @@
 var fs = require('fs');
+var http = require('http');
 var exec = require('child_process').exec;
 
 var BACKEND_COMMAND = "../backends/cpp/main";
@@ -15,33 +16,101 @@ function addFileToIndex(filename, fileRep) {
   index[filename] = fileRep;
 }
 
-exports.uploadFile = function uploadFile(filedata) {
+function backendUpload(filename, path, sizeBytes, cbErrorData) {
+  console.log('backend upload call!');
+  var options = {
+    host: 'localhost',
+    path: '/store?filename=' + filename + '&path=' + path + '&size=' + sizeBytes,
+    port: 11000
+  };
+
+  var cbCalled = false;
+
+
+  var req = http.get(options, function(res) {
+    console.log('STATUS: ' + res.statusCode);
+    console.log('HEADERS: ' + JSON.stringify(res.headers));
+
+    // Buffer the body entirely for processing as a whole.
+    var bodyChunks = [];
+    res.on('data', function(chunk) {
+      // You can process streamed parts here...
+      bodyChunks.push(chunk);
+    }).on('end', function() {
+      var body = Buffer.concat(bodyChunks);
+      console.log('BODY: ' + body);
+      // ...and/or process the entire body here.
+      if (!cbCalled) {
+        cbErrorData(false, body);
+        cbCalled = true;
+      }
+    })
+  });
+  req.on('error', function(e) {
+    console.log('ERROR: ' + e.message);
+    if (!cbCalled) {
+      cbErrorData(true, false);
+      cbCalled = true;
+    }
+  });
+}
+
+function backendDownload(filename, dstpath, cbErrorData) {
+  console.log('backend download call!');
+  var options = {
+    host: 'localhost',
+    path: '/load?filename=' + filename + '&path=' + dstpath,
+    port: 11000
+  };
+
+  var cbCalled = false;
+
+
+  var req = http.get(options, function(res) {
+    console.log('STATUS: ' + res.statusCode);
+    console.log('HEADERS: ' + JSON.stringify(res.headers));
+
+    // Buffer the body entirely for processing as a whole.
+    var bodyChunks = [];
+    res.on('data', function(chunk) {
+      // You can process streamed parts here...
+      bodyChunks.push(chunk);
+    }).on('end', function() {
+      var body = Buffer.concat(bodyChunks);
+      console.log('BODY: ' + body);
+      // ...and/or process the entire body here.
+      if (!cbCalled) {
+        cbErrorData(false, body);
+        cbCalled = true;
+      }
+    })
+  });
+  req.on('error', function(e) {
+    console.log('ERROR: ' + e.message);
+    if (!cbCalled) {
+      cbErrorData(true, false);
+      cbCalled = true;
+    }
+  });
+}
+
+exports.uploadFile = function uploadFile(filedata, cbErrorData) {
+  console.log("uploading file\n");
   if (!filedata) {
     return "Error!";
   }
   var filename = filedata.originalFilename;
   var path = filedata.path;
   var numBytes = filedata.size;
+  console.log(filename + " " + path + " " + numBytes);
 
-  if (!filename || !path) {
-    return "Error!";
-  }
-
-  if (numBytes > SIZE_LIMIT) {
-    return "Error!";
+  if (!filename || !path || !numBytes) {
+    cbErrorData("Missing filename or path or size!", false);
+    return;
   }
 
   console.log(path);
-  var command = BACKEND_COMMAND + " " + path;
-  console.log(command);
-
-  exec(command, {maxBuffer: SIZE_LIMIT}, function(error, stdout, stderr) {
-    if (error) {
-      console.log(error);
-    } else {
-      console.log(stdout);
-    }
-  });
+  backendUpload(filename, path, numBytes, cbErrorData);
 }
 
 // returns array of log entries {filename: "", index: ""}
@@ -57,70 +126,39 @@ function getLogEntries() {
   return log;
 }
 
+/*
 // returns index
 function appendToLogFile(filename, filesize) {
   fs.appendFileSync("logfile.txt", filename + " -%%- " + filesize + "\n");
   return getLogEntries().length - 1;
 }
-
-/*
-// synchronous
-exports.uploadFile = function(filedata) {
-  if (!filedata) {
-    return "Error!";
-  }
-  var filename = filedata.originalFilename;
-  var path = filedata.path;
-  var numBytes = filedata.size;
-
-  if (!filename || !path) {
-    return "Error!";
-  }
-
-  if (numBytes > SIZE_LIMIT) {
-    return "Error!";
-  }
-
-  var entryIndex = appendToLogFile(filename, numBytes);
-  exec('cp ' + path + ' data/' + entryIndex);
-  console.log('uploaded: ' + filename + ' index: ' + entryIndex);
-  return "index: " + entryIndex + ", url: store.haus/" + entryIndex;
-}
 */
 
-function serveFile(id, filename, res) {
+function serveFile(filename, path, res) {
   res.setHeader('Content-disposition', 'attachment; filename=' + filename);
-  var fileStream = fs.createReadStream('data/' + id);
+  var fileStream = fs.createReadStream(path);
   fileStream.pipe(res);
 }
 
 exports.getFile = function(req, res) {
-  var id = req.params.id;
-  if (!id) {
+  var filename = req.query.filename;
+  if (!filename) {
     res.status(404).send('File not found!');
     return;
   }
 
-  var log = getLogEntries();
-  if (id == 'head' | id == 'current') {
-    if (log.length > 0) {
-      id = log.length - 1;
-    } else {
-      id = -1;
-    }
-  }
+  var path = "/tmp/" + filename;
 
-  if (id >= 0 && id < log.length) {
-    if (fs.existsSync('data/' + id)) {
-      console.log('Served: ' + log[id].filename + ' at id: ' + id);
-      serveFile(id, log[id].filename, res);
-      return;
+  backendDownload(filename, path, function(error, data) {
+    if (error) {
+      res.status(404).send(error);
     } else {
-      res.status(404).send('File too old!');
-      return;
+      if (fs.existsSync(path)) {
+        console.log('Served: ' + filename + ' from path: ' + path);
+        serveFile(filename, path, res);
+      }
     }
-  }
-  res.status(404).send('File not found!');
+  });
 }
 
 exports.getList = function() {
