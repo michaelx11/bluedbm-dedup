@@ -16,6 +16,37 @@ function addFileToIndex(filename, fileRep) {
   index[filename] = fileRep;
 }
 
+function uploadBatchHelper(listData, cbError) {
+  if (listData.length == 0) {
+    cbError(false);
+    return;
+  }
+
+  var reqDetails = listData.pop();
+  var filename = reqDetails.filename;
+  var path = reqDetails.path;
+  var sizeBytes = reqDetails.sizeBytes;
+  backendUpload(filename, path, sizeBytes, function(error, data) {
+    if (error) {
+      console.log("Error while executing upload batch, num left: " + listData.length);
+      cbError(error);
+      return;
+    }
+
+    uploadBatchHelper(listData, cbError);
+  });
+}
+
+exports.uploadBatch = function(directory, cbError) {
+  var files = fs.readdirSync(directory);
+  var reqDetails = [];
+  for (var i = 0; i < files.length; i++) {
+    var dets = {filename: files[i], path: directory + "/" + files[i], sizeBytes: 0};
+    reqDetails.push(dets);
+  }
+  uploadBatchHelper(reqDetails, cbError);
+}
+
 function backendUpload(filename, path, sizeBytes, cbErrorData) {
   console.log('backend upload call!');
   var options = {

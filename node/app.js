@@ -51,7 +51,19 @@ app.get('/:id', function(req, res) {
   model.getFile(req, res);
 });
 */
-
+var timer = (new Date()).getTime();
+var path = '/home/ubuntu/movies';
+//var path = '/home/ubuntu/big/data/random';
+//var path = '/home/ubuntu/big/data/movies';
+//var path = '/home/ubuntu/big/data/isos';
+model.uploadBatch(path, function(error) {
+  if (error) {
+    console.log("Upload batch error: " + error);
+  } else {
+    console.log("Upload batch successful!");
+    console.log("Time elapsed: " + ((new Date()).getTime() - timer));
+  }
+});
 
 app.listen(app.get('port'), function() {
   console.log('Express server listening on port ' + app.get('port'));

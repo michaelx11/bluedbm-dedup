@@ -20,9 +20,12 @@
 #include "cryptopp/filters.h"
 #include "cryptopp/hex.h"
 
-//#define BLOCK_SIZE 128
+//#define BLOCK_SIZE 256
+#define BLOCK_SIZE 512
+//#define BLOCK_SIZE 1024
+//#define BLOCK_SIZE 2048
 //#define BLOCK_SIZE 4096
-#define BLOCK_SIZE 8192
+//#define BLOCK_SIZE 8192
 
 using namespace std;
 
@@ -35,9 +38,11 @@ class Storage {
   public:
     // increment when a new block is found
     uint32_t globalId = -1;
+    uint32_t countUploadedBlocks = 0;
 
     // Map from block hashes to id's
     unordered_multimap<string, uint32_t> blockMap;
+//    unordered_map<string, uint32_t> blockMap;
     unordered_map<string, vector<uint32_t>> fileMap;
     vector<unsigned char *> blockList;
     byte key[CryptoPP::AES::DEFAULT_KEYLENGTH];

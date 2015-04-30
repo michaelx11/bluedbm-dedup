@@ -32,12 +32,31 @@ int Storage::uploadFile(string filename, string srcpath) {
 
   ifstream file (srcpath.c_str(), ios::binary);
   file.seekg(0, file.end);
-  int size = file.tellg();
+  size_t size = file.tellg();
   // First block is size
-  result.push_back((uint32_t)size);
+  result.push_back((uint64_t)size);
+  printf("file size: %zu\n", size);
   file.seekg(0, file.beg);
+  printf("Beginning to read!\n");
 
   int counter = 0;
+
+  int numBlocks = size / BLOCK_SIZE + (size % BLOCK_SIZE == 0 ? 0 : 1);
+
+  /*
+  char * big_buffer = (char *)malloc(size + 10 * BLOCK_SIZE);
+  memset(big_buffer, 0, size + 10 * BLOCK_SIZE);
+  file.read(big_buffer, size);
+  printf("num blocks: %d\n", numBlocks);
+  for (int i = 0; i < numBlocks; i++) {
+//    memcpy(block, big_buffer + i * BLOCK_SIZE, BLOCK_SIZE);
+    uint32_t blockId = processBlock(reinterpret_cast<unsigned char*>(&big_buffer[i * BLOCK_SIZE]), key, iv);
+//    uint32_t blockId = processBlock(reinterpret_cast<unsigned char*>(block), key, iv);
+    result.push_back(blockId);
+//    memset(block, 0, BLOCK_SIZE);
+    counter++;
+  }
+  */
 
   while (file.read(block, BLOCK_SIZE)) {
     uint32_t blockId = processBlock(reinterpret_cast<unsigned char*>(block), key, iv);
@@ -46,6 +65,7 @@ int Storage::uploadFile(string filename, string srcpath) {
     counter++;
   }
   if (file.gcount() > 0) {
+    printf("GCOUNT > 0\n");
     uint32_t blockId = processBlock(reinterpret_cast<unsigned char*>(block), key, iv);
     result.push_back(blockId);
     counter++;
@@ -54,8 +74,11 @@ int Storage::uploadFile(string filename, string srcpath) {
   printf("Total blocks needed: %d\n", counter);
   printf("Blocks created: %d\n", globalId - prev);
   printf("Blocks deduped: %d\n", counter - (globalId - prev));
+  countUploadedBlocks += counter;
+  printf("Totals: created: %d, uploaded: %d\n", globalId + 1, countUploadedBlocks);
 
   fileMap.emplace(filename, result);
+//  free(big_buffer);
   return 0;
 }
 
@@ -94,6 +117,9 @@ uint32_t Storage::addBlock(unsigned char block[BLOCK_SIZE]) {
   memcpy(newBlock, block, BLOCK_SIZE);
   blockList.push_back(newBlock);
   globalId++;
+  if (globalId % 100000 == 0) {
+    printf("tick: %d\n", globalId);
+  }
   return globalId;
 }
 
@@ -101,7 +127,7 @@ uint32_t Storage::processBlock(unsigned char block[BLOCK_SIZE], byte key[], byte
   string blockStr(reinterpret_cast<char*>(block));
   string hash = computeSHA256(blockStr);
   auto search = blockMap.equal_range(hash);
-  uint32_t resultBlockId = -1;
+  int32_t resultBlockId = -1;
 
   // hash already exists as key
   for (auto item = search.first; item != search.second; item++) {
@@ -111,11 +137,19 @@ uint32_t Storage::processBlock(unsigned char block[BLOCK_SIZE], byte key[], byte
       break;
     }
   }
-  
-  // not found
-  if (resultBlockId == -1) {
+  /*
+  if (blockMap.count(hash)) {
+    resultBlockId = blockMap.find(hash)->second;
+//    printf("dedup: %d\n", resultBlockId);
+  } else {
     resultBlockId = addBlock(block);
-    blockMap.emplace(hash, resultBlockId);
+    blockMap.insert(make_pair(hash, resultBlockId));
+//    blockMap.emplace(hash, resultBlockId);
+  }
+  */
+  if (resultBlockId < 0) {
+    resultBlockId = addBlock(block);
+    blockMap.insert(make_pair(hash, resultBlockId));
   }
   return resultBlockId;
 }
